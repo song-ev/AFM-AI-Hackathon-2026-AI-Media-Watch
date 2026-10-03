@@ -1,0 +1,118 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aimw}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-aimw}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    # Migrate, then run the dev server. (Production uses the image's gunicorn CMD.)
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment: &backend_env
+      DJANGO_SETTINGS_MODULE: ai_media_watch.settings.dev
+      # Inside the compose network the database host is the "db" service.
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-aimw}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-insecure-dev-key-change-me}
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "*"
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A ai_media_watch worker -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      # Same configuration as the backend (DB + broker).
+      <<: *backend_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  live-worker:
+    build: .
+    command: celery -A ai_media_watch worker -Q live -l info --pool=solo -n live@%h
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      <<: *backend_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build: .
+    command: celery -A ai_media_watch beat -l info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      <<: *backend_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      # Browser calls the backend on the host's published port.
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_MAP_TILE_URL: ${NEXT_PUBLIC_MAP_TILE_URL:-}
+      NEXT_PUBLIC_MAP_ATTRIBUTION: ${NEXT_PUBLIC_MAP_ATTRIBUTION:-}
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

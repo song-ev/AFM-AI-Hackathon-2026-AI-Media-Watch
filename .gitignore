@@ -1,0 +1,58 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Django ---
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media/
+/staticfiles/
+
+# --- Environment / secrets ---
+.env
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local credentials and private artifacts
+.env.*
+!.env.example
+cookies*.txt
+*cookies*.txt
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite3
+*.sqlite3-*
+*.sql
+*.dump
+celerybeat-schedule*
+celerybeat.pid
+.pytest_cache/
+.coverage
+htmlcov/
+node_modules/
+.next/
+*.tsbuildinfo
+# Download model weights separately
+*.pt
+*.pth
+*.onnx
+*.h5
+*.ckpt

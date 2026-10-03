@@ -1,0 +1,243 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Cool-neutral (slate) base theme — official / trustworthy, fitting for a
+ * state anti-fraud tool rather than a consumer app. The risk scale
+ * (green/amber/red) is deliberately kept OUT of the base palette and lives in
+ * lib/utils/riskColor.ts so it reads consistently everywhere.
+ */
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 30%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 47% 30%;
+    --radius: 0.5rem;
+
+    /*
+     * Accent layer — sits on top of the slate base, used only to draw the eye
+     * to "live" parts of the UI (active pipeline stage, flowing connectors,
+     * selected graph nodes). Hues stay inside the slate/blue family so the
+     * official look is preserved; the risk scale (green/amber/red) is still the
+     * only place hot colours appear.
+     */
+    --accent-brand: 222 60% 42%; /* a touch richer than --primary, for glow */
+    --accent-brand-soft: 214 80% 56%;
+    --grid-line: 214 32% 91%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 13%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 13%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 18%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 22%;
+    --input: 217 33% 22%;
+    --ring: 213 27% 84%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Faint engineering grid — adds depth to the slate base without colour. */
+    background-image:
+      linear-gradient(hsl(var(--grid-line) / 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--grid-line) / 0.5) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Accent / motion layer
+ * Reusable, palette-safe animations and helpers for the pipeline view and
+ * graphs. All keep within the slate family except where they intentionally
+ * surface the shared risk scale.
+ * ---------------------------------------------------------------------------
+ */
+@layer components {
+  /* Panel that reads as a piece of "instrumentation": subtle top sheen. */
+  .panel-accent {
+    @apply relative overflow-hidden rounded-lg border bg-card;
+    box-shadow:
+      0 1px 2px hsl(222 47% 11% / 0.04),
+      0 8px 24px -12px hsl(222 47% 11% / 0.12);
+  }
+  .panel-accent::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--accent-brand-soft) / 0.7),
+      transparent
+    );
+  }
+
+  /* Active step gets a soft breathing glow in the brand hue. */
+  .glow-active {
+    box-shadow:
+      0 0 0 1px hsl(var(--accent-brand) / 0.5),
+      0 0 18px -2px hsl(var(--accent-brand) / 0.35);
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+
+  /* Connector line that "fills" left→right as a stage completes. */
+  .connector {
+    position: relative;
+    background: hsl(var(--border));
+    overflow: hidden;
+  }
+  .connector-fill {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--accent-brand)),
+      hsl(var(--accent-brand-soft))
+    );
+    transform-origin: left;
+  }
+  /* Animated dash flowing through an in-progress connector. */
+  .connector-flow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--accent-brand-soft) / 0.9) 50%,
+      transparent 100%
+    );
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: flow 1.2s linear infinite;
+  }
+
+  .console-cursor::after {
+    content: "▋";
+    margin-left: 2px;
+    animation: blink 1s steps(2, start) infinite;
+    color: hsl(var(--accent-brand-soft));
+  }
+}
+
+@layer utilities {
+  .animate-fade-up {
+    animation: fade-up 0.4s ease-out both;
+  }
+  .animate-pop-in {
+    animation: pop-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .animate-line-in {
+    animation: line-in 0.28s ease-out both;
+  }
+  /* Respect reduced-motion preferences. */
+  @media (prefers-reduced-motion: reduce) {
+    .glow-active,
+    .connector-flow::after,
+    .console-cursor::after,
+    .animate-fade-up,
+    .animate-pop-in,
+    .animate-line-in {
+      animation: none !important;
+    }
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px hsl(var(--accent-brand) / 0.4),
+      0 0 14px -4px hsl(var(--accent-brand) / 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px hsl(var(--accent-brand) / 0.7),
+      0 0 22px 0 hsl(var(--accent-brand) / 0.45);
+  }
+}
+@keyframes flow {
+  0% {
+    background-position: -40% 0;
+  }
+  100% {
+    background-position: 140% 0;
+  }
+}
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

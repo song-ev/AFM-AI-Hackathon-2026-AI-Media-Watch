@@ -1,0 +1,81 @@
+# Production compose. Run with:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# All secrets MUST be provided via the environment / a secrets manager вЂ” there
+# are NO insecure defaults here. Required: DJANGO_SECRET_KEY, POSTGRES_PASSWORD,
+# DJANGO_ALLOWED_HOSTS, DJANGO_CORS_ALLOWED_ORIGINS, ANTHROPIC_API_KEY.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_media_watch}
+      POSTGRES_USER: ${POSTGRES_USER:-aimw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No published port: the DB is reachable only on the internal network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aimw} -d ${POSTGRES_DB:-ai_media_watch}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend: &backend
+    build: .
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn ai_media_watch.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    env_file:
+      - .env
+    environment: &backend_env
+      DJANGO_SETTINGS_MODULE: ai_media_watch.settings.prod
+      DATABASE_URL: postgres://${POSTGRES_USER:-aimw}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ai_media_watch}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY}
+      DJANGO_DEBUG: "False"
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?set DJANGO_ALLOWED_HOSTS}
+      DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:?set DJANGO_CORS_ALLOWED_ORIGINS}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      YOLO_MODEL_PATH: ${YOLO_MODEL_PATH:-yolov8n.pt}
+      YOLO_LOGO_CLASSES: ${YOLO_LOGO_CLASSES:-}
+    volumes:
+      - media_data:/app/media
+      - static_data:/app/staticfiles
+    ports:
+      - "8000:8000"
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  worker:
+    <<: *backend
+    command: celery -A ai_media_watch worker -l info
+    ports: []
+
+  live-worker:
+    <<: *backend
+    command: celery -A ai_media_watch worker -Q live -l info --pool=solo -n live@%h
+    ports: []
+
+  beat:
+    <<: *backend
+    command: celery -A ai_media_watch beat -l info
+    ports: []
+
+volumes:
+  postgres_data:
+  media_data:
+  static_data:
